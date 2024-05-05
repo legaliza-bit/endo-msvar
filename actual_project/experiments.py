@@ -2,13 +2,22 @@ import numpy as np
 from scipy import stats
 from scipy import linalg
 
+
 def simulate(coeffs, sigmas, rho, n_obs, p00, p11):
-    # get eps and eta
     errors = np.random.multivariate_normal(
         mean=[0, 0],
-        cov=[[1, rho * sigmas[0]], [rho * sigmas[0], sigmas[0] ** 2]],
+        cov=[[1, rho], [rho, 1]],
         size=n_obs,
     )
+
+    state_coeffs = np.array([[p00, p11]])
+    state_exog = np.hstack([np.zeros((n_obs, 1))])
+
+    exog = np.hstack([
+        np.ones((n_obs, 1)), np.random.normal(0, 2, size=(n_obs, 1))
+    ])
+    endog = np.zeros(n_obs)
+
     # randomize states
     states = np.zeros(n_obs)
     p = p00 / (p00 + p11)
@@ -26,15 +35,7 @@ def simulate(coeffs, sigmas, rho, n_obs, p00, p11):
             else:
                 states[idx] = int(abs(states[idx - 1] - 1))
 
-    state_coeffs = np.array([[stats.norm.ppf(p00), stats.norm.ppf(p11)]])
-    state_exog = np.ones((n_obs, 1))
-
-    exog = np.hstack([
-        np.ones((n_obs, 1)), np.random.normal(0, 2, size=(n_obs, 1))
-    ])
-    endog = np.zeros(n_obs)
-    for i in range(n_obs):
-        endog[i] = exog[i, :] @ coeffs[:, int(states[i])].T + errors[i, 1]
+        endog[idx] = exog[idx, :] @ coeffs[:, int(states[idx])] + errors[idx, 1] * sigmas[int(states[idx])]
 
     return {
         "state_coeffs": state_coeffs,

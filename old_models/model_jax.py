@@ -74,9 +74,12 @@ class EMSAR_jax:
             if not state_coeffs
             else state_coeffs
         )
-        rho = random.uniform(key=key, minval=-0.99, maxval=0.99) if not rho else rho
+        rho = random.uniform(key=key, minval=-0.99, maxval=0.99, shape=(1,)) if not rho else rho
         sigmas = random.uniform(key=key, minval=0.01, maxval=1, shape=(2,)) if not sigmas else sigmas
-        return coeffs, state_coeffs, rho, sigmas
+        return {"coeffs": coeffs, 
+                "state_coeffs": state_coeffs, 
+                "rho": rho, 
+                "sigmas": sigmas}
 
     def init_state_probs(self, state_exog, state_coeffs):
         """
@@ -117,7 +120,7 @@ class EMSAR_jax:
                 self._calc_tvtp(state_exog, state_coeffs[:, 1]),
             ]
         )
-        # assert np.array_equal(np.sum(tvtp, axis=2), np.full((2, len(state_exog)), 1))
+        assert np.array_equal(np.sum(tvtp, axis=2), np.full((2, len(state_exog)), 1))
         return tvtp
 
     def _calc_endo_tp(self, state_exog, resid, state_coeffs, sigma, rho):
@@ -146,7 +149,7 @@ class EMSAR_jax:
                 self._calc_endo_tp(state_exog, resids[1], state_coeffs[:, 1], sigmas[1], rho),
             ]
         )
-        # assert (np.sum(endo_tp, axis=2) == 1).all(), np.sum(endo_tp, axis=2)
+        assert (np.sum(endo_tp, axis=2) == 1).all(), np.sum(endo_tp, axis=2)
         return endo_tp.reshape((2, 2))
 
     def calc_residuals(self, endog, exog, coeffs, autoregressive=False):
@@ -174,8 +177,7 @@ class EMSAR_jax:
             matrix of shape (2, 2)
 
         """
-
-        exog_part = stats.norm.pdf(resids) / sigmas.reshape(2, 1)
+        exog_part = stats.norm.pdf(resids / sigmas.reshape(2, 1)) / sigmas.reshape(2, 1)
         assert exog_part.shape == (2, 1), exog_part.shape
 
         tp_ratio = endo_tp / trans_probs
@@ -185,7 +187,7 @@ class EMSAR_jax:
 
     def calc_cond_llhs(self, resids, sigmas, trans_probs, endo_tp, state_probs):
         """
-        f(y_t | Y_{t-1}, Z_t; params) = f(y_t | S_t=i, S_{t-1}=j, Y_{t-1}, Z_t; params) 
+        f(y_t | Y_{t-1}, Z_t; params) = f(y_t | S_t=i, S_{t-1}=j, Y_{t-1}, Z_t; params)
                                         * p_{ij,t} * P(S_{t-1} | Y_{t-1}, Z_{t-1}; params)
         """
         cond_dens = self._calc_cond_density(resids, sigmas, trans_probs, endo_tp)
